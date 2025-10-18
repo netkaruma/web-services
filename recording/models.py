@@ -29,7 +29,7 @@ class Recording(models.Model):
         choices=Status.choices,
         null=True
     )
-
     category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
+    subcategory = models.ForeignKey(to=SubCategory, on_delete=models.SET_NULL, null=True, blank=True)
     sum = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     comment = models.TextField(null=True)

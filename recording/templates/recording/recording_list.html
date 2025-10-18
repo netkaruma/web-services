@@ -6,7 +6,7 @@
     <title>Финансовые записи</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
-        .container { max-width: 1400px; margin: 0 auto; }
+        .container { max-width: 1600px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .filters { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .filter-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
@@ -45,6 +45,42 @@
         .tab.active { background: white; border-color: #dee2e6; border-bottom: 1px solid white; margin-bottom: -1px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 600px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+        }
+        .close {
+            font-size: 24px;
+            cursor: pointer;
+            color: #6c757d;
+        }
+        .close:hover {
+            color: #495057;
+        }
     </style>
 </head>
 <body>
@@ -57,9 +93,9 @@
         </div>
 
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('records')">Записи</div>
-            <div class="tab" onclick="switchTab('categories')">Категории</div>
-            <div class="tab" onclick="switchTab('subcategories')">Подкатегории</div>
+            <div class="tab active" onclick="switchTab('records', event)">Записи</div>
+            <div class="tab" onclick="switchTab('categories', event)">Категории</div>
+            <div class="tab" onclick="switchTab('subcategories', event)">Подкатегории</div>
         </div>
 
         <div id="records-tab" class="tab-content active">
@@ -82,11 +118,17 @@
                         </div>
                         <div class="form-group">
                             <label for="category">Категория *</label>
-                            <select name="category" id="category" required>
+                            <select name="category" id="category" required onchange="updateSubcategories()">
                                 <option value="">Выберите категорию</option>
                                 {% for category in categories %}
                                     <option value="{{ category.id }}">{{ category.category }} ({{ category.get_type_display }})</option>
                                 {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="subcategory">Подкатегория</label>
+                            <select name="subcategory" id="subcategory">
+                                <option value="">Выберите подкатегорию</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -161,6 +203,7 @@
                             <th>Дата создания</th>
                             <th>Статус</th>
                             <th>Категория</th>
+                            <th>Подкатегория</th>
                             <th>Тип операции</th>
                             <th>Сумма</th>
                             <th>Комментарий</th>
@@ -173,6 +216,7 @@
                             <td>{{ recording.creation_date|date:"d.m.Y H:i" }}</td>
                             <td>{{ recording.get_status_display }}</td>
                             <td>{{ recording.category.category }}</td>
+                            <td>{{ recording.subcategory.subcategory|default:"-" }}</td>
                             <td>
                                 {% if recording.category.type %}
                                     {{ recording.category.get_type_display }}
@@ -186,17 +230,12 @@
                             <td>{{ recording.comment|default:"-" }}</td>
                             <td class="actions">
                                 <button class="btn btn-primary" onclick="editRecording({{ recording.id }})">✏️ Редакт.</button>
-                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="id" value="{{ recording.id }}">
-                                    <button type="submit" class="btn btn-danger" 
-                                            onclick="return confirm('Удалить запись от {{ recording.creation_date|date:'d.m.Y' }}?')">🗑️ Удалить</button>
-                                </form>
+                                <button class="btn btn-danger" onclick="deleteRecording({{ recording.id }}, '{{ recording.creation_date|date:"d.m.Y" }}', '{{ recording.sum }}', '{{ recording.category.category }}', '{{ recording.subcategory.subcategory|default:"" }}')">🗑️ Удалить</button>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" style="text-align: center; padding: 40px;">📝 Записи не найдены</td>
+                            <td colspan="8" style="text-align: center; padding: 40px;">📝 Записи не найдены</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -252,14 +291,8 @@
                             <td>{{ category.get_type_display }}</td>
                             <td>{{ category.subcategories.count }}</td>
                             <td class="actions">
-                                <button class="btn btn-warning" onclick="editCategory({{ category.id }})">✏️ Редакт.</button>
-                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete_category">
-                                    <input type="hidden" name="id" value="{{ category.id }}">
-                                    <button type="submit" class="btn btn-danger" 
-                                            onclick="return confirm('Удалить категорию \"{{ category.category }}\"? Все связанные подкатегории также будут удалены.')">🗑️ Удалить</button>
-                                </form>
+                                <button class="btn btn-warning" onclick="editCategory({{ category.id }}, '{{ category.category }}', '{{ category.type }}')">✏️ Редакт.</button>
+                                <button class="btn btn-danger" onclick="deleteCategory({{ category.id }}, '{{ category.category }}')">🗑️ Удалить</button>
                             </td>
                         </tr>
                         {% empty %}
@@ -316,14 +349,8 @@
                             <td>{{ subcategory.category.category }}</td>
                             <td>{{ subcategory.category.get_type_display }}</td>
                             <td class="actions">
-                                <button class="btn btn-warning" onclick="editSubcategory({{ subcategory.id }})">✏️ Редакт.</button>
-                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete_subcategory">
-                                    <input type="hidden" name="id" value="{{ subcategory.id }}">
-                                    <button type="submit" class="btn btn-danger" 
-                                            onclick="return confirm('Удалить подкатегорию \"{{ subcategory.subcategory }}\"?')">🗑️ Удалить</button>
-                                </form>
+                                <button class="btn btn-warning" onclick="editSubcategory({{ subcategory.id }}, '{{ subcategory.subcategory }}', {{ subcategory.category.id }})">✏️ Редакт.</button>
+                                <button class="btn btn-danger" onclick="deleteSubcategory({{ subcategory.id }}, '{{ subcategory.subcategory }}')">🗑️ Удалить</button>
                             </td>
                         </tr>
                         {% empty %}
@@ -337,12 +364,228 @@
         </div>
     </div>
 
+    <!-- Модальные окна для записей -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Редактировать запись</h3>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <form id="editForm">
+                {% csrf_token %}
+                <input type="hidden" name="id" id="edit_id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_status">Статус</label>
+                        <select name="status" id="edit_status" required>
+                            {% for value, label in status_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_category">Категория</label>
+                        <select name="category" id="edit_category" required onchange="updateEditSubcategories()">
+                            {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.category }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_subcategory">Подкатегория</label>
+                        <select name="subcategory" id="edit_subcategory">
+                            <option value="">Выберите подкатегорию</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_sum">Сумма</label>
+                        <input type="number" name="sum" id="edit_sum" step="0.01" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                        <label for="edit_comment">Комментарий</label>
+                        <textarea name="comment" id="edit_comment"></textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение удаления</h3>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <p id="deleteMessage">Вы уверены, что хотите удалить эту запись?</p>
+            <div class="form-row">
+                <form id="deleteForm" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="id" id="delete_id">
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальные окна для категорий -->
+    <div id="editCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Редактировать категорию</h3>
+                <span class="close" onclick="closeEditCategoryModal()">&times;</span>
+            </div>
+            <form id="editCategoryForm" method="post" action="{% url 'recording:recording-list' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_category">
+                <input type="hidden" name="id" id="edit_category_id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_category_name">Название категории *</label>
+                        <input type="text" name="category_name" id="edit_category_name" required placeholder="Введите название категории">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_category_type">Тип категории *</label>
+                        <select name="category_type" id="edit_category_type" required>
+                            <option value="">Выберите тип</option>
+                            {% for value, label in type_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditCategoryModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение удаления</h3>
+                <span class="close" onclick="closeDeleteCategoryModal()">&times;</span>
+            </div>
+            <p id="deleteCategoryMessage">Вы уверены, что хотите удалить эту категорию?</p>
+            <div class="form-row">
+                <form id="deleteCategoryForm" method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_category">
+                    <input type="hidden" name="id" id="delete_category_id">
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteCategoryModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальные окна для подкатегорий -->
+    <div id="editSubcategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Редактировать подкатегорию</h3>
+                <span class="close" onclick="closeEditSubcategoryModal()">&times;</span>
+            </div>
+            <form id="editSubcategoryForm" method="post" action="{% url 'recording:recording-list' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_subcategory">
+                <input type="hidden" name="id" id="edit_subcategory_id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_subcategory_name">Название подкатегории *</label>
+                        <input type="text" name="subcategory_name" id="edit_subcategory_name" required placeholder="Введите название подкатегории">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_parent_category">Родительская категория *</label>
+                        <select name="parent_category" id="edit_parent_category" required>
+                            <option value="">Выберите категорию</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.category }} ({{ category.get_type_display }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <button type="submit" class="btn btn-success">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditSubcategoryModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteSubcategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение удаления</h3>
+                <span class="close" onclick="closeDeleteSubcategoryModal()">&times;</span>
+            </div>
+            <p id="deleteSubcategoryMessage">Вы уверены, что хотите удалить эту подкатегорию?</p>
+            <div class="form-row">
+                <form id="deleteSubcategoryForm" method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_subcategory">
+                    <input type="hidden" name="id" id="delete_subcategory_id">
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteSubcategoryModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        const subcategoriesData = {
+            {% for category in categories %}
+                {{ category.id }}: [
+                    {% for subcategory in category.subcategories.all %}
+                        {id: {{ subcategory.id }}, name: "{{ subcategory.subcategory }}"},
+                    {% endfor %}
+                ],
+            {% endfor %}
+        };
+
+        function updateSubcategories() {
+            const categoryId = document.getElementById('category').value;
+            const subcategorySelect = document.getElementById('subcategory');
+            subcategorySelect.innerHTML = '<option value="">Выберите подкатегорию</option>';
+            
+            if (categoryId && subcategoriesData[categoryId]) {
+                subcategoriesData[categoryId].forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id;
+                    option.textContent = sub.name;
+                    subcategorySelect.appendChild(option);
+                });
+            }
+        }
+
+        function updateEditSubcategories() {
+            const categoryId = document.getElementById('edit_category').value;
+            const subcategorySelect = document.getElementById('edit_subcategory');
+            subcategorySelect.innerHTML = '<option value="">Выберите подкатегорию</option>';
+            
+            if (categoryId && subcategoriesData[categoryId]) {
+                subcategoriesData[categoryId].forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id;
+                    option.textContent = sub.name;
+                    subcategorySelect.appendChild(option);
+                });
+            }
+        }
+
         function clearFilters() {
             window.location.href = "{% url 'recording:recording-list' %}";
         }
 
-        function switchTab(tabName) {
+        function switchTab(tabName, event) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -351,43 +594,111 @@
             });
             
             document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
+            if (event) {
+                event.target.classList.add('active');
+            }
         }
+
+        let currentRecordingId = null;
 
         function editRecording(id) {
-            alert('Редактирование записи ID: ' + id);
-        }
-
-        function editCategory(id) {
-            alert('Редактирование категории ID: ' + id);
-        }
-
-        function editSubcategory(id) {
-            alert('Редактирование подкатегории ID: ' + id);
-        }
-
-        function quickDelete(id) {
-            if (confirm('Вы уверены, что хотите удалить эту запись?')) {
-                fetch("{% url 'recording:recording-list' %}", {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ id: id })
-                })
+            currentRecordingId = id;
+            
+            fetch(`{% url 'recording:recording-list' %}?id=${id}`)
                 .then(response => {
-                    if (response.ok) {
-                        location.reload();
-                    } else {
-                        alert('Ошибка при удалении записи');
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
                     }
+                    return response.json();
+                })
+                .then(recording => {
+                    document.getElementById('edit_id').value = recording.id;
+                    document.getElementById('edit_status').value = recording.status;
+                    document.getElementById('edit_category').value = recording.category.id;
+                    document.getElementById('edit_sum').value = recording.sum;
+                    document.getElementById('edit_comment').value = recording.comment || '';
+                    
+                    updateEditSubcategories();
+                    
+                    if (recording.subcategory) {
+                        setTimeout(() => {
+                            document.getElementById('edit_subcategory').value = recording.subcategory.id;
+                        }, 100);
+                    }
+                    
+                    document.getElementById('editModal').style.display = 'block';
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Ошибка при удалении записи');
+                    alert('Ошибка при загрузке данных записи: ' + error.message);
                 });
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentRecordingId = null;
+        }
+
+        function deleteRecording(id, date, sum, category, subcategory) {
+            currentRecordingId = id;
+            
+            let message = `Вы уверены, что хотите удалить запись?\n\nДата: ${date}\nСумма: ${sum} ₽\nКатегория: ${category}`;
+            if (subcategory && subcategory !== '-') {
+                message += `\nПодкатегория: ${subcategory}`;
             }
+            
+            document.getElementById('deleteMessage').textContent = message;
+            document.getElementById('delete_id').value = id;
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            currentRecordingId = null;
+        }
+
+        function editCategory(id, name, type) {
+            document.getElementById('edit_category_id').value = id;
+            document.getElementById('edit_category_name').value = name;
+            document.getElementById('edit_category_type').value = type;
+            document.getElementById('editCategoryModal').style.display = 'block';
+        }
+
+        function closeEditCategoryModal() {
+            document.getElementById('editCategoryModal').style.display = 'none';
+        }
+
+        function deleteCategory(id, name) {
+            document.getElementById('deleteCategoryMessage').textContent = 
+                `Вы уверены, что хотите удалить категорию "${name}"? Все связанные подкатегории также будут удалены.`;
+            document.getElementById('delete_category_id').value = id;
+            document.getElementById('deleteCategoryModal').style.display = 'block';
+        }
+
+        function closeDeleteCategoryModal() {
+            document.getElementById('deleteCategoryModal').style.display = 'none';
+        }
+
+        function editSubcategory(id, name, categoryId) {
+            document.getElementById('edit_subcategory_id').value = id;
+            document.getElementById('edit_subcategory_name').value = name;
+            document.getElementById('edit_parent_category').value = categoryId;
+            document.getElementById('editSubcategoryModal').style.display = 'block';
+        }
+
+        function closeEditSubcategoryModal() {
+            document.getElementById('editSubcategoryModal').style.display = 'none';
+        }
+
+        function deleteSubcategory(id, name) {
+            document.getElementById('deleteSubcategoryMessage').textContent = 
+                `Вы уверены, что хотите удалить подкатегорию "${name}"?`;
+            document.getElementById('delete_subcategory_id').value = id;
+            document.getElementById('deleteSubcategoryModal').style.display = 'block';
+        }
+
+        function closeDeleteSubcategoryModal() {
+            document.getElementById('deleteSubcategoryModal').style.display = 'none';
         }
 
         function getCookie(name) {
@@ -406,11 +717,97 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            const editForm = document.getElementById('editForm');
+            if (editForm) {
+                editForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(this);
+                    const data = {
+                        id: formData.get('id'),
+                        status: formData.get('status'),
+                        category: formData.get('category'),
+                        subcategory: formData.get('subcategory') || null,
+                        sum: parseFloat(formData.get('sum')),
+                        comment: formData.get('comment')
+                    };
+                    
+                    fetch("{% url 'recording:recording-list' %}", {
+                        method: 'PUT',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            closeEditModal();
+                            location.reload();
+                        } else {
+                            return response.text().then(text => { 
+                                throw new Error(text || 'Ошибка обновления') 
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Ошибка при обновлении записи: ' + error.message);
+                    });
+                });
+            }
+
+            const deleteForm = document.getElementById('deleteForm');
+            if (deleteForm) {
+                deleteForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(this);
+                    const data = {
+                        id: formData.get('id')
+                    };
+                    
+                    fetch("{% url 'recording:recording-list' %}", {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            closeDeleteModal();
+                            location.reload();
+                        } else {
+                            return response.text().then(text => { 
+                                throw new Error(text || 'Ошибка удаления') 
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Ошибка при удалении записи: ' + error.message);
+                    });
+                });
+            }
+
             const sumField = document.getElementById('sum');
             if (sumField) {
                 sumField.focus();
             }
         });
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                closeEditModal();
+                closeDeleteModal();
+                closeEditCategoryModal();
+                closeDeleteCategoryModal();
+                closeEditSubcategoryModal();
+                closeDeleteSubcategoryModal();
+            }
+        }
     </script>
 </body>
 </html>

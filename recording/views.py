@@ -8,8 +8,14 @@ from .serializers import RecordingSerializer, RecordingCreateSerializer, Recordi
 
 class RecordingView(APIView):
     def get(self, request):
+        recording_id = request.GET.get('id')
+        if recording_id:
+            recording = get_object_or_404(Recording, pk=recording_id)
+            serializer = RecordingSerializer(recording)
+            return Response(serializer.data)
+        
         recordings = Recording.objects.select_related(
-            'category'
+            'category', 'subcategory'
         ).prefetch_related(
             'category__subcategories'
         ).all().order_by('-creation_date')
@@ -31,7 +37,8 @@ class RecordingView(APIView):
         if search_query:
             recordings = recordings.filter(
                 Q(comment__icontains=search_query) |
-                Q(category__category__icontains=search_query)
+                Q(category__category__icontains=search_query) |
+                Q(subcategory__subcategory__icontains=search_query)
             )
         
         if request.accepted_media_type == 'text/html' or not request.accepted_media_type:
@@ -54,52 +61,131 @@ class RecordingView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        action = request.POST.get('action')
-        
-        if action == 'create_category':
-            try:
-                category = Category.objects.create(
-                    category=request.POST.get('category_name'),
-                    type=request.POST.get('category_type')
-                )
-                return redirect('recording:recording-list')
-            except Exception as e:
-                recordings = Recording.objects.all().order_by('-creation_date')
-                context = {
-                    'recordings': recordings,
-                    'categories': Category.objects.all(),
-                    'subcategories': SubCategory.objects.all(),
-                    'status_choices': Recording.Status.choices,
-                    'type_choices': Category.Type.choices,
-                    'error': f'Ошибка создания категории: {str(e)}'
-                }
-                return render(request, 'recording/recording_list.html', context, status=400)
-        
-        elif action == 'create_subcategory':
-            try:
-                subcategory = SubCategory.objects.create(
-                    subcategory=request.POST.get('subcategory_name'),
-                    category_id=request.POST.get('parent_category')
-                )
-                return redirect('recording:recording-list')
-            except Exception as e:
-                recordings = Recording.objects.all().order_by('-creation_date')
-                context = {
-                    'recordings': recordings,
-                    'categories': Category.objects.all(),
-                    'subcategories': SubCategory.objects.all(),
-                    'status_choices': Recording.Status.choices,
-                    'type_choices': Category.Type.choices,
-                    'error': f'Ошибка создания подкатегории: {str(e)}'
-                }
-                return render(request, 'recording/recording_list.html', context, status=400)
-        
-        else:
-            if request.content_type == 'application/x-www-form-urlencoded':
+        # Для веб-форм (создание записей, категорий, подкатегорий)
+        if request.content_type == 'application/x-www-form-urlencoded':
+            action = request.POST.get('action')
+            
+            if action == 'create_category':
+                try:
+                    category = Category.objects.create(
+                        category=request.POST.get('category_name'),
+                        type=request.POST.get('category_type')
+                    )
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка создания категории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            elif action == 'create_subcategory':
+                try:
+                    subcategory = SubCategory.objects.create(
+                        subcategory=request.POST.get('subcategory_name'),
+                        category_id=request.POST.get('parent_category')
+                    )
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка создания подкатегории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            elif action == 'update_category':
+                try:
+                    category_id = request.POST.get('id')
+                    category = get_object_or_404(Category, pk=category_id)
+                    category.category = request.POST.get('category_name')
+                    category.type = request.POST.get('category_type')
+                    category.save()
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка обновления категории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            elif action == 'update_subcategory':
+                try:
+                    subcategory_id = request.POST.get('id')
+                    subcategory = get_object_or_404(SubCategory, pk=subcategory_id)
+                    subcategory.subcategory = request.POST.get('subcategory_name')
+                    subcategory.category_id = request.POST.get('parent_category')
+                    subcategory.save()
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка обновления подкатегории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            elif action == 'delete_category':
+                try:
+                    category_id = request.POST.get('id')
+                    category = get_object_or_404(Category, pk=category_id)
+                    category.delete()
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка удаления категории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            elif action == 'delete_subcategory':
+                try:
+                    subcategory_id = request.POST.get('id')
+                    subcategory = get_object_or_404(SubCategory, pk=subcategory_id)
+                    subcategory.delete()
+                    return redirect('recording:recording-list')
+                except Exception as e:
+                    recordings = Recording.objects.all().order_by('-creation_date')
+                    context = {
+                        'recordings': recordings,
+                        'categories': Category.objects.all(),
+                        'subcategories': SubCategory.objects.all(),
+                        'status_choices': Recording.Status.choices,
+                        'type_choices': Category.Type.choices,
+                        'error': f'Ошибка удаления подкатегории: {str(e)}'
+                    }
+                    return render(request, 'recording/recording_list.html', context, status=400)
+            
+            # Создание записи (без action)
+            else:
                 try:
                     recording = Recording.objects.create(
                         status=request.POST.get('status'),
                         category_id=request.POST.get('category'),
+                        subcategory_id=request.POST.get('subcategory') or None,
                         sum=request.POST.get('sum', 0),
                         comment=request.POST.get('comment', '')
                     )
@@ -115,15 +201,16 @@ class RecordingView(APIView):
                         'error': f'Ошибка создания записи: {str(e)}'
                     }
                     return render(request, 'recording/recording_list.html', context, status=400)
-            
-            else:
-                serializer = RecordingCreateSerializer(data=request.data)
-                if serializer.is_valid():
-                    serializer.save()
-                    recording = Recording.objects.get(id=serializer.instance.id)
-                    full_serializer = RecordingSerializer(recording)
-                    return Response(full_serializer.data, status=status.HTTP_201_CREATED)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Для API запросов (AJAX)
+        else:
+            serializer = RecordingCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                recording = Recording.objects.get(id=serializer.instance.id)
+                full_serializer = RecordingSerializer(recording)
+                return Response(full_serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request):
         recording_id = request.data.get('id')
@@ -140,29 +227,11 @@ class RecordingView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request):
-        action = request.POST.get('action') if request.content_type == 'application/x-www-form-urlencoded' else request.data.get('action')
+        recording_id = request.data.get('id')
+        if not recording_id:
+            return Response({'error': 'ID записи обязателен'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if action == 'delete_category':
-            category_id = request.POST.get('id') if request.content_type == 'application/x-www-form-urlencoded' else request.data.get('id')
-            category = get_object_or_404(Category, pk=category_id)
-            category.delete()
-            return redirect('recording:recording-list')
+        recording = get_object_or_404(Recording, pk=recording_id)
+        recording.delete()
         
-        elif action == 'delete_subcategory':
-            subcategory_id = request.POST.get('id') if request.content_type == 'application/x-www-form-urlencoded' else request.data.get('id')
-            subcategory = get_object_or_404(SubCategory, pk=subcategory_id)
-            subcategory.delete()
-            return redirect('recording:recording-list')
-        
-        else:
-            recording_id = request.POST.get('id') if request.content_type == 'application/x-www-form-urlencoded' else request.data.get('id')
-            if not recording_id:
-                return Response({'error': 'ID записи обязателен'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            recording = get_object_or_404(Recording, pk=recording_id)
-            recording.delete()
-            
-            if request.content_type == 'application/x-www-form-urlencoded':
-                return redirect('recording:recording-list')
-            
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
