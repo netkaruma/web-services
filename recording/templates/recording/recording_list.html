@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Финансовые записи</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .filters { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .filter-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .filter-group { display: flex; flex-direction: column; }
+        .filter-group label { font-weight: bold; margin-bottom: 5px; color: #495057; }
+        .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; min-width: 150px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 14px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #545b62; }
+        .btn-warning { background: #ffc107; color: black; }
+        .btn-warning:hover { background: #e0a800; }
+        .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        th { background-color: #f8f9fa; font-weight: bold; color: #495057; }
+        tr:hover { background-color: #f8f9fa; }
+        .positive { color: #28a745; font-weight: bold; }
+        .negative { color: #dc3545; font-weight: bold; }
+        .actions { white-space: nowrap; display: flex; gap: 5px; }
+        .form-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .form-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; flex: 1; min-width: 200px; }
+        .form-group label { font-weight: bold; margin-bottom: 5px; color: #495057; }
+        .form-group input, .form-group select, .form-group textarea { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; }
+        .form-group textarea { min-height: 60px; resize: vertical; }
+        .error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+        .section-title { font-size: 1.5rem; margin-bottom: 15px; color: #495057; border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; }
+        .tab { padding: 10px 20px; cursor: pointer; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0; }
+        .tab.active { background: white; border-color: #dee2e6; border-bottom: 1px solid white; margin-bottom: -1px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 Финансовые записи</h1>
+            <div>
+                <button class="btn btn-secondary" onclick="clearFilters()">Сбросить фильтры</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('records')">Записи</div>
+            <div class="tab" onclick="switchTab('categories')">Категории</div>
+            <div class="tab" onclick="switchTab('subcategories')">Подкатегории</div>
+        </div>
+
+        <div id="records-tab" class="tab-content active">
+            <div class="form-container">
+                <h3 class="section-title">Добавить новую запись</h3>
+                {% if error %}
+                    <div class="error">{{ error }}</div>
+                {% endif %}
+                <form method="post" action="{% url 'recording:recording-list' %}">
+                    {% csrf_token %}
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="status">Статус *</label>
+                            <select name="status" id="status" required>
+                                <option value="">Выберите статус</option>
+                                {% for value, label in status_choices %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="category">Категория *</label>
+                            <select name="category" id="category" required>
+                                <option value="">Выберите категорию</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.category }} ({{ category.get_type_display }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sum">Сумма *</label>
+                            <input type="number" name="sum" id="sum" step="0.01" required placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label for="comment">Комментарий</label>
+                            <textarea name="comment" id="comment" placeholder="Введите комментарий..."></textarea>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">Добавить запись</button>
+                </form>
+            </div>
+
+            <div class="filters">
+                <h3>Фильтры записей</h3>
+                <form method="get">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="status">Статус</label>
+                            <select name="status" id="status_filter">
+                                <option value="">Все статусы</option>
+                                {% for value, label in status_choices %}
+                                    <option value="{{ value }}" {% if current_filters.status == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="category">Категория</label>
+                            <select name="category" id="category_filter">
+                                <option value="">Все категории</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}" {% if current_filters.category == category.id|stringformat:"i" %}selected{% endif %}>
+                                        {{ category.category }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="type">Тип операции</label>
+                            <select name="type" id="type_filter">
+                                <option value="">Все типы</option>
+                                {% for value, label in type_choices %}
+                                    <option value="{{ value }}" {% if current_filters.type == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="search">Поиск</label>
+                            <input type="text" name="search" id="search" placeholder="Поиск по комментарию..." 
+                                   value="{{ current_filters.search|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <button type="submit" class="btn btn-primary">Применить фильтры</button>
+                        <a href="{% url 'recording:recording-list' %}" class="btn btn-secondary">Сбросить</a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Дата создания</th>
+                            <th>Статус</th>
+                            <th>Категория</th>
+                            <th>Тип операции</th>
+                            <th>Сумма</th>
+                            <th>Комментарий</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for recording in recordings %}
+                        <tr>
+                            <td>{{ recording.creation_date|date:"d.m.Y H:i" }}</td>
+                            <td>{{ recording.get_status_display }}</td>
+                            <td>{{ recording.category.category }}</td>
+                            <td>
+                                {% if recording.category.type %}
+                                    {{ recording.category.get_type_display }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="{% if recording.sum >= 0 %}positive{% else %}negative{% endif %}">
+                                {{ recording.sum }} ₽
+                            </td>
+                            <td>{{ recording.comment|default:"-" }}</td>
+                            <td class="actions">
+                                <button class="btn btn-primary" onclick="editRecording({{ recording.id }})">✏️ Редакт.</button>
+                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="id" value="{{ recording.id }}">
+                                    <button type="submit" class="btn btn-danger" 
+                                            onclick="return confirm('Удалить запись от {{ recording.creation_date|date:'d.m.Y' }}?')">🗑️ Удалить</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px;">📝 Записи не найдены</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if recordings %}
+            <div style="margin-top: 20px; text-align: right; color: #6c757d;">Найдено записей: {{ recordings|length }}</div>
+            {% endif %}
+        </div>
+
+        <div id="categories-tab" class="tab-content">
+            <div class="form-container">
+                <h3 class="section-title">Управление категориями</h3>
+                <h4>Добавить новую категорию</h4>
+                <form method="post" action="{% url 'recording:recording-list' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_category">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="category_name">Название категории *</label>
+                            <input type="text" name="category_name" id="category_name" required placeholder="Введите название категории">
+                        </div>
+                        <div class="form-group">
+                            <label for="category_type">Тип категории *</label>
+                            <select name="category_type" id="category_type" required>
+                                <option value="">Выберите тип</option>
+                                {% for value, label in type_choices %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">Создать категорию</button>
+                </form>
+            </div>
+
+            <div class="table-container">
+                <h4>Существующие категории</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Тип</th>
+                            <th>Кол-во подкатегорий</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td>{{ category.category }}</td>
+                            <td>{{ category.get_type_display }}</td>
+                            <td>{{ category.subcategories.count }}</td>
+                            <td class="actions">
+                                <button class="btn btn-warning" onclick="editCategory({{ category.id }})">✏️ Редакт.</button>
+                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete_category">
+                                    <input type="hidden" name="id" value="{{ category.id }}">
+                                    <button type="submit" class="btn btn-danger" 
+                                            onclick="return confirm('Удалить категорию \"{{ category.category }}\"? Все связанные подкатегории также будут удалены.')">🗑️ Удалить</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 40px;">📁 Категории не найдены</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="subcategories-tab" class="tab-content">
+            <div class="form-container">
+                <h3 class="section-title">Управление подкатегориями</h3>
+                <h4>Добавить новую подкатегорию</h4>
+                <form method="post" action="{% url 'recording:recording-list' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_subcategory">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="subcategory_name">Название подкатегории *</label>
+                            <input type="text" name="subcategory_name" id="subcategory_name" required placeholder="Введите название подкатегории">
+                        </div>
+                        <div class="form-group">
+                            <label for="parent_category">Родительская категория *</label>
+                            <select name="parent_category" id="parent_category" required>
+                                <option value="">Выберите категорию</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.category }} ({{ category.get_type_display }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">Создать подкатегорию</button>
+                </form>
+            </div>
+
+            <div class="table-container">
+                <h4>Существующие подкатегории</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Родительская категория</th>
+                            <th>Тип категории</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subcategory in subcategories %}
+                        <tr>
+                            <td>{{ subcategory.subcategory }}</td>
+                            <td>{{ subcategory.category.category }}</td>
+                            <td>{{ subcategory.category.get_type_display }}</td>
+                            <td class="actions">
+                                <button class="btn btn-warning" onclick="editSubcategory({{ subcategory.id }})">✏️ Редакт.</button>
+                                <form method="post" action="{% url 'recording:recording-list' %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete_subcategory">
+                                    <input type="hidden" name="id" value="{{ subcategory.id }}">
+                                    <button type="submit" class="btn btn-danger" 
+                                            onclick="return confirm('Удалить подкатегорию \"{{ subcategory.subcategory }}\"?')">🗑️ Удалить</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 40px;">📂 Подкатегории не найдены</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function clearFilters() {
+            window.location.href = "{% url 'recording:recording-list' %}";
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function editRecording(id) {
+            alert('Редактирование записи ID: ' + id);
+        }
+
+        function editCategory(id) {
+            alert('Редактирование категории ID: ' + id);
+        }
+
+        function editSubcategory(id) {
+            alert('Редактирование подкатегории ID: ' + id);
+        }
+
+        function quickDelete(id) {
+            if (confirm('Вы уверены, что хотите удалить эту запись?')) {
+                fetch("{% url 'recording:recording-list' %}", {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: id })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Ошибка при удалении записи');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ошибка при удалении записи');
+                });
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const sumField = document.getElementById('sum');
+            if (sumField) {
+                sumField.focus();
+            }
+        });
+    </script>
+</body>
+</html>
